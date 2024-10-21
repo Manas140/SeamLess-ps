@@ -10,7 +10,7 @@ A Not-Yet-Smart Stitch Utility [ PS SCRIPT ]
 
 - Windows
 
-  - Run `install.bat` as admin.
+  - Run `install.cmd` as admin.
   - Restart Photoshop
   - Script available in `Files > Scripts > SeamLess`
 
@@ -18,6 +18,6 @@ A Not-Yet-Smart Stitch Utility [ PS SCRIPT ]
 
   - WIP
 
-# Acknowledgement
+## Acknowledgement
 
 - [kevinmartz](https://github.com/kevinmartz/UQC-TOOLS/)
