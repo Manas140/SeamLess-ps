@@ -31,7 +31,7 @@ echo Install SeamLess v0.2
 pause
 
 >NUL copy "%~dp0SeamLess.jsx" "%ScriptsDir%"
->NUL copy "%~dp0stitch.exe" "%ScriptsDir%"
+>NUL copy "%~dp0slice.exe" "%ScriptsDir%"
 
 echo:
 echo Script "SeamLess v0.2" has been installed.
