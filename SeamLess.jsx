@@ -6,7 +6,7 @@ params["useOpen"] = true;
 params["source"] = [];
 
 params["roughHeight"] = 5000;
-params["absolute"] = true;
+params["absolute"] = false;
 params["skipStep"] = 10;
 params["neighborCount"] = 5;
 params["threshold"] = 50;
@@ -14,14 +14,37 @@ params["threshold"] = 50;
 params["sameOutput"] = true;
 params["output"] = [];
 
-params["process"] = "";
-
 params["exportQual"] = 9;
 params["exportFormat"] = "png";
 
-function createDialog()
-{
-    var d = new Window('dialog', 'SeamLESS v0.1 - A NOT-YET-Smart Stitch Utility By Silly Guy');
+// Function to create and run a batch file with a pause
+function runCommand(cmd, isWindows) {
+    var script = isWindows ? "/run.bat" : "/run.sh";
+    var tempSh = new File(Folder.temp + script);
+
+    tempSh.open("w");
+
+    if (isWindows) {
+        tempSh.writeln("@echo off");
+        tempSh.writeln(cmd);
+        tempSh.writeln("echo.");
+        tempSh.writeln("pause");
+    } else {
+        return;
+        // WIP
+        tempSh.writeln(cmd);
+        tempSh.writeln("read -s -k $'?Press any key to continue.'");
+    }
+    // Open the file for writing
+
+    tempSh.close();
+    tempSh.execute();
+
+    callback();
+}
+
+function createDialog() {
+    var d = new Window('dialog', 'SeamLESS v0.2 - A Smart Stitch Utility By Silly Guy');
 
     var borderProperty = new Object();
     borderProperty["borderStyle"] = 'topDivider';
@@ -127,10 +150,10 @@ function createDialog()
     d.mainGroup.step3.exportOpt.alignment = 'left';
 
     d.sameOutputRadio = d.mainGroup.step3.exportOpt.add('radiobutton', undefined, 'Use current folder');
-    params["sameOutput"] = app.activeDocument.saved ? params["sameOutput"] : false;
+    params["sameOutput"] = !app.activeDocument.fsName ? params["sameOutput"] : false;
 
     d.sameOutputRadio.value = params["sameOutput"];
-    d.sameOutputRadio.enabled = app.activeDocument.saved;
+    d.sameOutputRadio.enabled = !app.activeDocument.fsName;
 
     d.useOutputFolderRadio = d.mainGroup.step3.exportOpt.add('radiobutton', undefined, 'Use different folder');
     d.useOutputFolderRadio.value = !params["sameOutput"];
@@ -142,7 +165,6 @@ function createDialog()
     d.outputDirText.preferredSize.width = 400
     d.mainGroup.step3.exportOpt.selectOutputDir.enabled = !params["sameOutput"];
 
-    // progress bar 
     d.mainGroup.add('panel', undefined, undefined, borderProperty)
     d.mainGroup.add('statictext', undefined, "Report any errors at: https://github.com/manas140/SeamLess-ps")
 
@@ -160,40 +182,39 @@ function createDialog()
     return d;
 }
 
-function merge()
-{
+function merge() {
     var docs = [];
-    if (params['useOpen'])
-    {
-        docs = app.documents;
+    if (params['useOpen']) {
+        for (var i = 0; i < app.documents.length; i++) {
+            docs.push(app.documents[i]);
+        }
     }
-    else
-    {
+    else {
         var files = params["source"].getFiles(/\.(jpg|jpeg|png|tif|tiff|psd|bmp)$/i);
 
-        if (files.length === 0)
-        {
+        if (files.length === 0) {
             alert("Source has no documents to process.");
             return;
         }
 
-        for (var j = 0; j < files.length; j++)
-        {
-            try
-            {
+        for (var j = 0; j < files.length; j++) {
+            try {
                 var doc = open(files[j]);
                 docs.push(doc);
-            } catch (e)
-            {
+            } catch (e) {
                 alert("Error opening file: " + files[j].name + "\n" + e.message);
             }
         }
     }
 
+
+    docs.sort(function (a, b) {
+        return a.name.localeCompare(b.name);
+    });
+
     var docCount = docs.length;
 
-    if (docCount <= 1)
-    {
+    if (docCount <= 1) {
         alert("Less than ONE document to process!");
         return;
     }
@@ -202,8 +223,7 @@ function merge()
     var totalHeight = 0;
     var maxRes = 0;
 
-    for (var i = 0; i < docCount; i++)
-    {
+    for (var i = 0; i < docCount; i++) {
         var doc = docs[i];
         maxRes = Math.max(maxRes, doc.resolution);
         minWidth = i < 1 ? doc.width.as('px') : Math.min(minWidth, doc.width.as('px'));
@@ -214,8 +234,7 @@ function merge()
 
     var height;
 
-    for (var i = 0; i < docCount; i++)
-    {
+    for (var i = 0; i < docCount; i++) {
 
         var doc = docs[i];
         var height = doc.height.as('px');
@@ -224,8 +243,7 @@ function merge()
         var temp = doc.duplicate();
         temp.flatten();
 
-        if (temp.width.as('px') != minWidth)
-        {
+        if (temp.width.as('px') != minWidth) {
             var scaleFactor = minWidth / temp.width.as('px');
             height = temp.height.as('px') * scaleFactor;
             temp.resizeImage(minWidth, height, maxRes);
@@ -249,107 +267,80 @@ function merge()
     return mergedDoc;
 }
 
-function slice(doc)
-{
-    if (!doc.saved || !doc.fullName || !doc.path)
-    {
-        if (!params["output"])
-        {
-            alert("Please select an output folder before proceeding.");
-            return;
-        }
+function slice(doc) {
+    if (!params["output"].fsName) {
+        alert("Please select an output folder before proceeding.");
+        return;
     }
 
-    if (params["roughHeight"] >= doc.height.as('px'))
-    {
+    var rh = Number(params["roughHeight"]);
+    if (rh >= doc.height.as('px')) {
         alert("Skipping... Image height is smaller than rough height.");
         return;
     }
 
-    // left, top, right, bottom
-    if (params["absolute"])
-    {
-        var height = doc.height.as('px');
-        var docDupl = doc.duplicate();
+    var pngSaveOptions = new PNGSaveOptions();
+    pngSaveOptions.compression = 9;
 
-        for (var i = 0; i * params["roughHeight"] < height; i++)
-        {
-            var splitDoc = docDupl.duplicate();
-            splitDoc.flatten();
+    // Save as temp file
+    var saveFile = new File(Folder.temp + "/" + "merged.png");
+    doc.saveAs(saveFile, pngSaveOptions, true, Extension.LOWERCASE);
 
-            var nextH = (i + 1) * params["roughHeight"];
-            nextH = nextH > height ? height : nextH;
+    // Define script and command parameters
+    var scriptFolder = new Folder($.fileName).parent;
 
-            splitDoc.crop([0, i * params["roughHeight"], doc.width.as('px'), nextH]);
+    var isWindows = $.os.toLowerCase().indexOf("windows") >= 0;
+    var scriptFile = new File(scriptFolder + (isWindows ? "/slice.exe" : "/slice"));
 
-            var fileName = i + ".png";
-            var path = params["sameOutput"] ? doc.path : params["output"].fsName;
+    var th = params["threshold"];
+    var ss = params["skipStep"];
+    var nc = params["neighborCount"];
 
-            var saveFile = new File(path + "/" + fileName);
-
-            var pngSaveOptions = new PNGSaveOptions();
-            pngSaveOptions.compression = 9; // Optional: Adjust compression level (0-9)
-            splitDoc.saveAs(saveFile, pngSaveOptions, true, Extension.LOWERCASE);
-
-            splitDoc.close(SaveOptions.DONOTSAVECHANGES);
-        }
-        docDupl.close(SaveOptions.DONOTSAVECHANGES);
-    } else
-    {
-        alert("Sorry! Smart Stitch is still WIP. Use absolute height.");
-        return;
-    }
+    var cmd = isWindows ? "\"" + scriptFile.fsName + "\"" + " \"" + saveFile.fsName + "\" " + rh + " " + th + " " + ss + " " + nc + " \"" + params["output"].fsName + "\" " + (params["absolute"] ? "true" : "false") :
+        "./" + scriptFile.fsName + " \"" + saveFile.fsName + "\" " + rh + " " + th + " " + ss + " " + nc + " \"" + params["output"].fsName + "\" " + (params["absolute"] ? "true" : "false");
+    runCommand(cmd, function () {
+        alert("Slices Exported in: " + params["output"].fsName);
+    });
 }
 
 // Show the dialog
-function main()
-{
+function main() {
     // var params = initParams();
     var window = createDialog();
     app.preferences.rulerUnits = Units.PIXELS;
 
     // radio handlers
-    window.useOpenBtn.onClick = function ()
-    {
+    window.useOpenBtn.onClick = function () {
         params["useOpen"] = window.useOpenBtn.value;
         window.mainGroup.step.sourceOpt.selectSource.enabled = false;
     };
-    window.selectSourceRadio.onClick = function ()
-    {
+    window.selectSourceRadio.onClick = function () {
         params["useOpen"] = window.useOpenBtn.value;
         window.mainGroup.step.sourceOpt.selectSource.enabled = true;
     }
 
-    window.sameOutputRadio.onClick = function ()
-    {
+    window.sameOutputRadio.onClick = function () {
         params["sameOutput"] = window.sameOutputRadio.value;
         window.mainGroup.step3.exportOpt.selectOutputDir.enabled = false;
     };
-    window.useOutputFolderRadio.onClick = function ()
-    {
+    window.useOutputFolderRadio.onClick = function () {
         params["sameOutput"] = window.sameOutputRadio.value;
         window.mainGroup.step3.exportOpt.selectOutputDir.enabled = true;
     }
 
     // opts handler
-    window.selectSourceBtn.onClick = function ()
-    {
+    window.selectSourceBtn.onClick = function () {
         var selectedFolder = Folder.selectDialog('Select input folder');
         params["source"] = selectedFolder;
         window.sourceText.text = params["source"].fsName;
     };
-    window.selectOutputBtn.onClick = function ()
-    {
+    window.selectOutputBtn.onClick = function () {
         var selectedFolder = Folder.selectDialog('Select output folder');
         params["output"] = selectedFolder;
         window.outputDirText.text = params["output"].fsName;
     };
-    window.absoluteBtn.onClick = function ()
-    {
-        alert("Sorry! Smart Stitch is still WIP. Use absolute height.");
-        window.absoluteBtn.value = params["absolute"];
-        return;
 
+    window.absoluteBtn.onClick = function () {
         params["absolute"] = window.absoluteBtn.value;
         window.heightText.text = params["absolute"] ? "Height" : "Rough Height";
 
@@ -363,22 +354,26 @@ function main()
     }
 
     // handlers
-    window.sliceBtn.onClick = function ()
-    {
+    window.sliceBtn.onClick = function () {
+        params["roughHeight"] = window.roughHeight.text;
+        params["skipStep"] = window.skipStep.text;
+        params["neighborCount"] = window.neighborCount.text;
+        params["threshold"] = window.threshold.text;
         slice(app.activeDocument);
     };
-    window.mergeBtn.onClick = function ()
-    {
+    window.mergeBtn.onClick = function () {
         merge();
     };
-    window.stitchBtn.onClick = function ()
-    {
+    window.stitchBtn.onClick = function () {
+        if (!params["output"].fsName) {
+            alert("Please select an output folder before proceeding.");
+            return;
+        }
         var mergedDoc = merge();
         slice(mergedDoc);
         window.close();
     };
-    window.closeBtn.onClick = function ()
-    {
+    window.closeBtn.onClick = function () {
         window.close();
     };
 

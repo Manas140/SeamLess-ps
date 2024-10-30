@@ -1,6 +1,6 @@
 # SeamLess-ps
 
-A Not-Yet-Smart Stitch Utility [ PS SCRIPT ]
+A Smart Stitch Utility [ PS SCRIPT ]
 
 <p align="center">
   <img src="image.png">
@@ -10,14 +10,21 @@ A Not-Yet-Smart Stitch Utility [ PS SCRIPT ]
 
 - Windows
 
-  - Run `install.cmd` as admin.
-  - Restart Photoshop
-  - Script available in `Files > Scripts > SeamLess`
+  - Download `windows.zip` from `Releases` Tab & Extract it.
+  - Run `install.bat` as admin.
+  - Restart Photoshop.
+  - Find the script in `Files > Scripts > SeamLess`.
 
 - Mac
 
   - WIP
 
-## Acknowledgement
+## Build [ Slice ]
+
+```sh
+  cargo build -r --target <target>
+```
+
+# Acknowledgement
 
 - [kevinmartz](https://github.com/kevinmartz/UQC-TOOLS/)
